@@ -28,7 +28,11 @@ namespace toml {
 class Value;
 typedef std::chrono::system_clock::time_point Time;
 typedef std::vector<Value> Array;
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
 typedef std::map<std::string, Value> Table;
+#else
+using Table = std::vector<std::pair<std::string, Value>>;
+#endif
 
 namespace internal {
 template<typename T> struct call_traits_value {
@@ -1536,8 +1540,12 @@ inline Value* Value::setChild(const std::string& key, const Value& v)
     if (!is<Table>())
         failwith("type must be table to do set(key, v).");
 
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
     (*table_)[key] = v;
     return &(*table_)[key];
+#else
+    return &table_->emplace_back(key, v).second;
+#endif
 }
 
 inline Value* Value::setChild(const std::string& key, Value&& v)
@@ -1548,8 +1556,12 @@ inline Value* Value::setChild(const std::string& key, Value&& v)
     if (!is<Table>())
         failwith("type must be table to do set(key, v).");
 
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
     (*table_)[key] = std::move(v);
     return &(*table_)[key];
+#else
+    return &table_->emplace_back(key, std::move(v)).second;
+#endif
 }
 
 inline bool Value::erase(const std::string& key)
@@ -1585,7 +1597,16 @@ inline bool Value::eraseChild(const std::string& key)
     if (!is<Table>())
         failwith("type must be table to do erase(key).");
 
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
     return table_->erase(key) > 0;
+#else
+    const auto sizeBefore = table_->size();
+    table_->erase(
+        std::remove_if(table_->begin(), table_->end(), [&key] (auto&& p) { return p.first == key; }),
+        table_->end()
+    );
+    return table_->size() < sizeBefore;
+#endif
 }
 
 inline Value& Value::operator[](const std::string& key)
@@ -1690,7 +1711,11 @@ inline Value* Value::findChild(const std::string& key)
 {
     assert(is<Table>());
 
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
     auto it = table_->find(key);
+#else
+    auto it = std::find_if(table_->begin(), table_->end(), [&key] (auto&& p) { return p.first == key; });
+#endif
     if (it == table_->end())
         return nullptr;
 
@@ -1701,7 +1726,11 @@ inline const Value* Value::findChild(const std::string& key) const
 {
     assert(is<Table>());
 
+#ifndef TINYTOML_PRESERVE_TABLE_ORDER
     auto it = table_->find(key);
+#else
+    auto it = std::find_if(table_->begin(), table_->end(), [&key] (auto&& p) { return p.first == key; });
+#endif
     if (it == table_->end())
         return nullptr;
 
